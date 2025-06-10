@@ -1,15 +1,16 @@
 package me.shwetagoyal.sliidesampleapp.presentation.userlist
 
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import me.shwetagoyal.sliidesampleapp.R
@@ -26,11 +27,14 @@ class UserListViewModel @Inject constructor(
     private val userRepository: UserRepository,
     @IoDispatcher private val ioDispatcher: CoroutineDispatcher
 ) : ViewModel() {
-    var state by mutableStateOf(UserState())
-        private set
+
+    private val _state = MutableStateFlow(UserState())
+    val state: StateFlow<UserState> = _state.asStateFlow()
 
     private val _event = MutableSharedFlow<UserEvent>()
     val event = _event.asSharedFlow()
+
+    private val maxRetries = 3
 
     private val retryableErrors = setOf(
         DataError.Network.NO_INTERNET,
@@ -39,38 +43,46 @@ class UserListViewModel @Inject constructor(
         DataError.Network.TOO_MANY_REQUESTS
     )
 
+    init {
+        loadUsers()
+    }
 
     fun onAction(action: UserAction) {
         when (action) {
-            UserAction.OnScreenLoad -> loadUsers()
-            UserAction.OnCreateUserClick -> state = state.copy(showCreateDialog = true)
+            UserAction.OnCreateUserClick -> _state.update {
+                it.copy(showCreateDialog = true)
+            }
+
             is UserAction.OnConfirmCreateUser -> createUser(action.name, action.email)
-            is UserAction.OnDeleteUserClick -> state =
-                state.copy(showDeleteDialog = true, userIdToDelete = action.userId)
+            is UserAction.OnDeleteUserClick -> _state.update {
+                it.copy(showDeleteDialog = true, userIdToDelete = action.userId)
+            }
 
             UserAction.OnConfirmDeleteUser -> deleteUser()
-            UserAction.OnDialogDismiss -> state = state.copy(
-                showCreateDialog = false,
-                showDeleteDialog = false,
-                userIdToDelete = null
-            )
+            UserAction.OnDialogDismiss -> _state.update {
+                it.copy(
+                    showCreateDialog = false,
+                    showDeleteDialog = false,
+                    userIdToDelete = null
+                )
+            }
 
-            is UserAction.OnRefreshAction -> loadUsers(
-                forceReload = true,
-                isUserGesture = action.isUserGesture
-            )
-
+            is UserAction.OnRefreshAction -> loadUsers(isRefresh = action.isUserGesture)
         }
     }
 
-    private fun loadUsers(forceReload: Boolean = false, isUserGesture: Boolean = false) {
-        if (state.hasLoadedUsers && !forceReload) return
+    private fun loadUsers(isRefresh: Boolean = false) {
+        if (!isRefresh && _state.value.hasLoadedUsers) return
 
         viewModelScope.launch {
-            state = state.copy(
-                isLoading = !isUserGesture,
-                isRefreshing = isUserGesture
-            )
+            _state.update {
+                it.copy(
+                    isLoading = true,
+                    isRefreshing = isRefresh
+                )
+            }
+
+            var retryCount = 0
 
             while (true) {
                 val result = withContext(ioDispatcher) {
@@ -79,29 +91,33 @@ class UserListViewModel @Inject constructor(
 
                 when (result) {
                     is Result.Success -> {
-                        val now = System.currentTimeMillis()
-                        val users = result.data.map { it.copy(createdAt = now) }
-
-                        state = state.copy(
-                            users = users,
-                            isLoading = false,
-                            isRefreshing = false,
-                            hasLoadedUsers = true
-                        )
+                        val users =
+                            result.data.map { it.copy(createdAt = System.currentTimeMillis()) }
+                        _state.update { current ->
+                            current.copy(
+                                users = users,
+                                isLoading = false,
+                                isRefreshing = false,
+                                hasLoadedUsers = true
+                            )
+                        }
                         return@launch
                     }
 
                     is Result.Error -> {
-                        state = state.copy(
-                            isLoading = false,
-                            isRefreshing = false
-                        )
+                        _state.update {
+                            it.copy(
+                                isLoading = false,
+                                isRefreshing = false
+                            )
+                        }
                         _event.emit(UserEvent.UserLoadFailed(result.error.asUiText()))
 
-                        if (result.error in retryableErrors) {
+                        if (result.error in retryableErrors && retryCount < maxRetries) {
+                            retryCount++
                             delay(3000)
                             continue
-                        }else {
+                        } else {
                             return@launch
                         }
                     }
@@ -113,7 +129,9 @@ class UserListViewModel @Inject constructor(
 
     private fun createUser(name: String, email: String) {
         viewModelScope.launch {
-            state = state.copy(isLoading = true, showCreateDialog = false)
+            _state.update {
+                it.copy(isLoading = true, showCreateDialog = false, hasLoadedUsers = false)
+            }
             val result = userRepository.addUser(
                 name = name,
                 email = email,
@@ -130,7 +148,12 @@ class UserListViewModel @Inject constructor(
                     } else {
                         result.error.asUiText()
                     }
-                    state = state.copy(isLoading = false)
+                    _state.update {
+                        it.copy(
+                            isLoading = false,
+                            hasLoadedUsers = true
+                        )
+                    }
                     _event.emit(UserEvent.Error(message))
                 }
             }
@@ -140,11 +163,15 @@ class UserListViewModel @Inject constructor(
 
     private fun deleteUser() {
         viewModelScope.launch {
-            val id = state.userIdToDelete ?: return@launch
-            state = state.copy(
-                isLoading = true,
-                showDeleteDialog = false,
-                userIdToDelete = null)
+            val id = state.value.userIdToDelete ?: return@launch
+            _state.update {
+                it.copy(
+                    isLoading = true,
+                    showDeleteDialog = false,
+                    userIdToDelete = null,
+                    hasLoadedUsers = false
+                )
+            }
 
             when (val result = userRepository.deleteUser(id)) {
                 is Result.Success -> {
@@ -153,7 +180,12 @@ class UserListViewModel @Inject constructor(
                 }
 
                 is Result.Error -> {
-                    state = state.copy(isLoading = false)
+                    _state.update {
+                        it.copy(
+                            isLoading = false,
+                            hasLoadedUsers = true,
+                        )
+                    }
                     _event.emit(UserEvent.Error(result.error.asUiText()))
                 }
             }

@@ -16,4 +16,6 @@
     <string name="create_user_title">Create User</string>
     <string name="create_button_text">Create</string>
     <string name="error_unexpected">Unexpected error occurred</string>
+    <string name="name_label">name</string>
+    <string name="email_label">email</string>
 </resources>

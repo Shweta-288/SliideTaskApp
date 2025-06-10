@@ -7,6 +7,5 @@ sealed interface UserAction{
     data class OnDeleteUserClick(val userId: Int) : UserAction
     data object OnConfirmDeleteUser : UserAction
     data object OnDialogDismiss : UserAction
-    data object OnScreenLoad : UserAction
     data class OnRefreshAction(val isUserGesture: Boolean) : UserAction
 }

@@ -7,6 +7,8 @@ import dagger.hilt.components.SingletonComponent
 import io.ktor.client.HttpClient
 import me.shwetagoyal.sliidesampleapp.data.UserRepositoryImpl
 import me.shwetagoyal.sliidesampleapp.domain.UserRepository
+import me.shwetagoyal.sliidesampleapp.network.UserRemoteDataSource
+import me.shwetagoyal.sliidesampleapp.network.UserRemoteDataSourceImpl
 import javax.inject.Singleton
 
 @Module
@@ -15,7 +17,14 @@ object RepositoryModule {
 
     @Provides
     @Singleton
-    fun provideUserRepository(client: HttpClient): UserRepository {
-        return UserRepositoryImpl(client)
+    fun provideUserRemoteDataSource(client: HttpClient): UserRemoteDataSource {
+        return UserRemoteDataSourceImpl(client)
     }
+
+    @Provides
+    @Singleton
+    fun provideUserRepository(remoteDataSource: UserRemoteDataSource): UserRepository {
+        return UserRepositoryImpl(remoteDataSource)
+    }
+
 }

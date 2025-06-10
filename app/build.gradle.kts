@@ -104,6 +104,8 @@ dependencies {
     testImplementation(libs.junit.jupiter.params)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.mockk)
+    testImplementation(libs.ktor.client.mock)
+
 }
 
 tasks.withType<Test>().configureEach {
