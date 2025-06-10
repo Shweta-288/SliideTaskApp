@@ -1,0 +1,19 @@
+<resources>
+    <string name="app_name">Sliide Sample App</string>
+    <string name="error_request_timeout">The request timed out.</string>
+    <string name="error_too_many_requests">You\'ve hit your rate limit.</string>
+    <string name="error_no_internet">Couldn\'t reach server, please check your connection.</string>
+    <string name="error_server_error">Oops, something went wrong, please try again.</string>
+    <string name="error_unknown">An unknown error occurred.</string>
+    <string name="error_email_exists">A user with that email already exists.</string>
+    <string name="user_created_successfully">User is created successfully.</string>
+    <string name="user_deleted_successfully">User is deleted successfully.</string>
+    <string name="confirm_delete_title">Confirm Delete.</string>
+    <string name="confirm_delete_message">Are you sure you want to delete this user?</string>
+    <string name="delete_button_text">Delete</string>
+    <string name="cancel_button_text">Cancel</string>
+    <string name="sliide_user_list">User List</string>
+    <string name="create_user_title">Create User</string>
+    <string name="create_button_text">Create</string>
+    <string name="error_unexpected">Unexpected error occurred</string>
+</resources>
